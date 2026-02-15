@@ -1,0 +1,60 @@
+{
+  "name": "jarvis-ai",
+  "version": "1.0.0",
+  "description": "Jarvis AI Desktop Application",
+  "main": "main.js",
+  "author": "Michael Carter",
+  "license": "ISC",
+  "type": "commonjs",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "lint": "electron-builder lint",
+    "test": "echo \"Ready for tests\" && exit 0",
+    "build": "electron-builder",
+    "dist": "electron-builder --win"
+  },
+  "build": {
+    "appId": "com.jarvis.ai",
+    "productName": "Jarvis AI",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!node_modules/.cache"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Jarvis AI",
+      "installerIcon": "icon.ico",
+      "uninstallerIcon": "icon.ico",
+      "deleteAppDataOnUninstall": false
+    },
+    "asar": true
+  },
+  "devDependencies": {
+    "electron": "^40.3.0",
+    "electron-builder": "^24.13.3"
+  }
+}

@@ -1,0 +1,21 @@
+{
+    "python.defaultInterpreterPath": "${workspaceFolder}/jarvis_backend_env/Scripts/python.exe",
+    "python.analysis.extraPaths": [
+        "${workspaceFolder}",
+        "${workspaceFolder}/jarvis"
+    ],
+    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.exclude": [
+        "**/.venv",
+        "**/.venv_jarvis",
+        "**/.venv_old",
+        "**/jarvis_backend_env",
+        ".venv",
+        ".venv_jarvis",
+        "jarvis_backend_env",
+        "**/.venv/**",
+        "**/.venv_jarvis/**",
+        "**/jarvis_backend_env/**"
+    ],
+    "python.terminal.activateEnvironment": true
+}

@@ -1,0 +1,1330 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JARVIS | Neural Command Center</title>
+    <meta name="theme-color" content="#0a0b10">
+    <link rel="manifest" href="/static/manifest.json">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@300;500;700&family=Inter:wght@300;400;600&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --neon-blue: #00d2ff;
+            --neon-cyan: #00f2ff;
+            --neon-purple: #9d00ff;
+            --neon-green: #39FF14;
+            --neon-red: #ff3131;
+            --bg-dark: #0a0b10;
+            --panel-bg: rgba(18, 20, 28, 0.7);
+            --glass-bg: rgba(255, 255, 255, 0.03);
+            --border-glow: rgba(0, 210, 255, 0.15);
+            --font-main: 'Rajdhani', sans-serif;
+            --font-tech: 'Orbitron', sans-serif;
+            --font-ui: 'Inter', sans-serif;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            background-image:
+                radial-gradient(circle at 50% 50%, rgba(0, 80, 150, 0.05) 0%, transparent 80%),
+                linear-gradient(rgba(10, 11, 16, 0.9), rgba(10, 11, 16, 0.9));
+            color: #fff;
+            font-family: var(--font-ui);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* --- TOP NAVIGATION --- */
+        .top-nav {
+            height: 60px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 30px;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            z-index: 100;
+        }
+
+        .nav-tabs {
+            display: flex;
+            gap: 20px;
+        }
+
+        .nav-tab {
+            font-family: var(--font-tech);
+            font-size: 11px;
+            letter-spacing: 2px;
+            color: rgba(255, 255, 255, 0.4);
+            cursor: pointer;
+            padding: 8px 15px;
+            border-radius: 4px;
+            transition: 0.3s;
+            background: rgba(255, 255, 255, 0.03);
+            text-transform: uppercase;
+        }
+
+        .nav-tab.active {
+            color: var(--neon-cyan);
+            background: rgba(0, 242, 255, 0.1);
+            box-shadow: inset 0 0 10px rgba(0, 242, 255, 0.1);
+        }
+
+        .nav-tab:hover {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .top-right-status {
+            display: flex;
+            gap: 25px;
+            font-family: var(--font-tech);
+            font-size: 10px;
+            letter-spacing: 1px;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--neon-green);
+            box-shadow: 0 0 10px var(--neon-green);
+            animation: pulse-green 2s infinite;
+        }
+
+        @keyframes pulse-green {
+            0% {
+                opacity: 0.4;
+            }
+
+            50% {
+                opacity: 1;
+            }
+
+            100% {
+                opacity: 0.4;
+            }
+        }
+
+        /* --- DASHBOARD GRID --- */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 320px 1fr 320px;
+            gap: 15px;
+            padding: 15px;
+            flex-grow: 1;
+            min-height: 0;
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            backdrop-filter: blur(20px);
+        }
+
+        .panel-header {
+            padding: 12px 15px;
+            background: rgba(255, 255, 255, 0.02);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            font-family: var(--font-tech);
+            font-size: 10px;
+            letter-spacing: 1.5px;
+            color: rgba(255, 255, 255, 0.5);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .panel-header i {
+            color: var(--neon-blue);
+            font-style: normal;
+        }
+
+        /* --- LEFT COLUMN --- */
+        .visual-input {
+            height: 200px;
+            background: rgba(0, 0, 0, 0.4);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        .visual-input .overlay-text {
+            font-family: var(--font-tech);
+            font-size: 9px;
+            color: rgba(255, 255, 255, 0.3);
+            margin-top: 10px;
+        }
+
+        .metrics-grid {
+            padding: 20px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .metric-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .metric-circle {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: 3px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        .metric-value {
+            font-family: var(--font-tech);
+            font-size: 16px;
+            color: var(--neon-cyan);
+        }
+
+        .metric-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.4);
+            letter-spacing: 1px;
+        }
+
+        .process-list {
+            flex-grow: 1;
+            padding: 15px;
+            font-family: var(--font-tech);
+            font-size: 9px;
+            overflow-y: auto;
+        }
+
+        .process-item {
+            display: grid;
+            grid-template-columns: 1fr 50px 50px;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .process-item.header {
+            color: rgba(255, 255, 255, 0.3);
+            text-transform: uppercase;
+        }
+
+        /* --- CENTER COLUMN --- */
+        .center-column {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .core-system {
+            flex-grow: 1;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .orb-outer {
+            width: 350px;
+            height: 350px;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .orb-particle-sphere {
+            width: 280px;
+            height: 280px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255, 220, 100, 0.4) 0%, transparent 70%);
+            box-shadow:
+                0 0 50px rgba(255, 200, 50, 0.2),
+                inset 0 0 30px rgba(255, 200, 50, 0.1);
+            position: relative;
+            overflow: hidden;
+            animation: orb-breathe 4s ease-in-out infinite;
+        }
+
+        /* Mock high-density particles */
+        .orb-particle-sphere::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: radial-gradient(#FFD700 1px, transparent 1px);
+            background-size: 8px 8px;
+            opacity: 0.6;
+            mask-image: radial-gradient(circle, black 40%, transparent 80%);
+            animation: particle-float 20s linear infinite;
+        }
+
+        @keyframes orb-breathe {
+
+            0%,
+            100% {
+                transform: scale(1);
+                filter: brightness(1);
+            }
+
+            50% {
+                transform: scale(1.05);
+                filter: brightness(1.3);
+            }
+        }
+
+        @keyframes particle-float {
+            from {
+                transform: rotate(0deg) scale(1.2);
+            }
+
+            to {
+                transform: rotate(360deg) scale(1.2);
+            }
+        }
+
+        .controls-dock {
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            background: rgba(0, 0, 0, 0.2);
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .btn-action {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.05);
+            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: 0.3s;
+            font-size: 20px;
+        }
+
+        .btn-action:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--neon-blue);
+            box-shadow: 0 0 15px rgba(0, 210, 255, 0.2);
+        }
+
+        .btn-action.end-call {
+            width: 120px;
+            background: rgba(255, 49, 49, 0.15);
+            border-color: rgba(255, 49, 49, 0.3);
+            color: var(--neon-red);
+            font-family: var(--font-tech);
+            font-size: 14px;
+            gap: 10px;
+        }
+
+        .btn-action.end-call:hover {
+            background: var(--neon-red);
+            color: #fff;
+            box-shadow: 0 0 20px var(--neon-red);
+        }
+
+        /* --- RIGHT COLUMN (TRANSCRIPT) --- */
+        .transcript-panel {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-container {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            scroll-behavior: smooth;
+        }
+
+        .msg-block {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .msg-header {
+            font-family: var(--font-tech);
+            font-size: 10px;
+            letter-spacing: 1px;
+            color: var(--neon-cyan);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .msg-header.user {
+            color: var(--neon-purple);
+        }
+
+        .msg-content {
+            font-size: 13px;
+            line-height: 1.6;
+            color: rgba(255, 255, 255, 0.8);
+            background: rgba(255, 255, 255, 0.02);
+            padding: 12px;
+            border-radius: 8px;
+            border-left: 2px solid var(--neon-blue);
+            white-space: pre-wrap;
+        }
+
+        .msg-block.user .msg-content {
+            border-left: none;
+            border-right: 2px solid var(--neon-purple);
+            background: rgba(157, 0, 255, 0.03);
+            text-align: right;
+        }
+
+        .chat-input-area {
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .chat-input-area input {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 12px 15px;
+            color: #fff;
+            font-family: var(--font-ui);
+            outline: none;
+            transition: 0.3s;
+        }
+
+        .chat-input-area input:focus {
+            border-color: var(--neon-blue);
+            background: rgba(255, 255, 255, 0.08);
+            box-shadow: 0 0 10px rgba(0, 210, 255, 0.1);
+        }
+
+        /* --- FOOTER LABEL --- */
+        .footer-label {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-family: var(--font-tech);
+            font-size: 8px;
+            color: rgba(255, 255, 255, 0.2);
+            letter-spacing: 2px;
+        }
+
+        /* Responsive Scrollbar */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Status colors for classes */
+        .listening .orb-particle-sphere {
+            box-shadow: 0 0 60px rgba(0, 210, 255, 0.4);
+            background: radial-gradient(circle, var(--neon-blue) 0%, transparent 70%);
+        }
+
+        .thinking .orb-particle-sphere {
+            animation: orb-think 1s infinite alternate;
+        }
+
+        .speaking .orb-particle-sphere {
+            transform: scale(1.15);
+            animation: orb-speak 0.3s infinite alternate;
+        }
+
+        @keyframes orb-think {
+            from {
+                filter: hue-rotate(0deg);
+            }
+
+            to {
+                filter: hue-rotate(90deg);
+            }
+        }
+
+        @keyframes orb-speak {
+            from {
+                opacity: 0.8;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+    
+
+        .status-button {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--neon-cyan);
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: 0.3s;
+            font-size: 14px;
+        }
+
+        .status-button:hover {
+            border-color: var(--neon-cyan);
+            box-shadow: 0 0 12px rgba(0, 242, 255, 0.2);
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(5px);
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            animation: fadeIn 0.3s;
+        }
+
+        .modal-content {
+            width: 420px;
+            background: rgba(10, 11, 16, 0.95);
+            border: 1px solid var(--neon-cyan);
+            border-radius: 12px;
+            box-shadow: 0 0 30px rgba(0, 242, 255, 0.2);
+            font-family: var(--font-tech);
+        }
+
+        .modal-header {
+            padding: 15px 20px;
+            border-bottom: 1px solid rgba(0, 242, 255, 0.3);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: var(--neon-cyan);
+            letter-spacing: 2px;
+            font-weight: bold;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 24px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .close-btn:hover {
+            color: var(--neon-red);
+            text-shadow: 0 0 10px var(--neon-red);
+        }
+
+        .modal-body {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .setting-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .setting-group label {
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.5);
+            letter-spacing: 1px;
+        }
+
+        .setting-group input {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #fff;
+            padding: 10px;
+            border-radius: 6px;
+            font-family: var(--font-ui);
+            outline: none;
+            transition: 0.3s;
+        }
+
+        .setting-group input:focus {
+            border-color: var(--neon-cyan);
+            box-shadow: 0 0 10px rgba(0, 242, 255, 0.1);
+        }
+
+        .modal-footer {
+            padding: 15px 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .btn-save {
+            background: rgba(0, 242, 255, 0.1);
+            border: 1px solid var(--neon-cyan);
+            color: var(--neon-cyan);
+            padding: 8px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: var(--font-tech);
+            letter-spacing: 1px;
+            transition: 0.3s;
+        }
+
+        .btn-save:hover {
+            background: var(--neon-cyan);
+            color: #000;
+            box-shadow: 0 0 20px var(--neon-cyan);
+        }
+
+        .btn-cancel {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: rgba(255, 255, 255, 0.8);
+            padding: 8px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: var(--font-tech);
+            letter-spacing: 1px;
+            transition: 0.3s;
+            margin-right: 10px;
+        }
+
+        .btn-cancel:hover {
+            border-color: var(--neon-red);
+            color: var(--neon-red);
+            box-shadow: 0 0 15px rgba(255, 49, 49, 0.3);
+        }
+
+        .confirm-text {
+            font-family: var(--font-ui);
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.8);
+            line-height: 1.5;
+        }
+
+        .confirm-tag {
+            font-size: 9px;
+            letter-spacing: 1px;
+            color: rgba(255, 255, 255, 0.5);
+            text-transform: uppercase;
+        }
+
+        .toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 6px 0;
+            color: rgba(255, 255, 255, 0.85);
+            font-family: var(--font-ui);
+            font-size: 12px;
+        }
+
+        .toggle-row input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--neon-cyan);
+        }
+
+    
+
+        .error-toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 49, 49, 0.15);
+            border: 1px solid var(--neon-red);
+            border-radius: 8px;
+            padding: 12px 18px;
+            color: var(--neon-red);
+            font-family: var(--font-tech);
+            z-index: 2000;
+            animation: slide-up 0.3s ease-out;
+        }
+
+        .success-toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(57, 255, 20, 0.15);
+            border: 1px solid var(--neon-green);
+            border-radius: 8px;
+            padding: 12px 18px;
+            color: var(--neon-green);
+            font-family: var(--font-tech);
+            z-index: 2000;
+            animation: slide-up 0.3s ease-out;
+        }
+
+        @keyframes slide-up {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+
+    </style>
+</head>
+
+<body>
+
+    <nav class="top-nav">
+        <div class="nav-tabs">
+            <div class="nav-tab active">Dashboard</div>
+            <div class="nav-tab">Contacts</div>
+            <div class="nav-tab">Notes</div>
+            <div class="nav-tab">Connect</div>
+            <div class="nav-tab">Phone</div>
+        </div>
+        <div class="top-right-status">
+            <div class="status-item">
+                <div class="status-dot"></div> SYSTEM READY
+            </div>
+            <div class="status-item">NET LINKED</div>
+            <div class="status-item" id="nav-mode">LISTENING</div>
+            <button class="status-button" id="settings-btn" title="Settings">SET</button>
+        </div>
+    </nav>
+
+    <main class="dashboard-grid">
+        <!-- LEFT COLUMN -->
+        <div class="panel">
+            <div class="panel-header"><i>📷</i> VISUAL INPUT <span>● ONLINE</span></div>
+            <div class="visual-input" id="visual-panel">
+                <video id="camera-feed" autoplay playsinline
+                    style="width: 100%; height: 100%; object-fit: cover; display: none;"></video>
+                <div id="camera-placeholder" style="display: flex; flex-direction: column; align-items: center;">
+                    <div style="font-size: 40px; color: rgba(255,255,255,0.1);">📷</div>
+                    <div class="overlay-text">VIDEO FEED OFFLINE</div>
+                </div>
+            </div>
+
+            <div class="panel-header" style="border-top: 1px solid rgba(255, 255, 255, 0.05);"><i>📊</i> SYSTEM METRICS
+            </div>
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-circle">
+                        <div class="metric-value" id="cpu-val">0%</div>
+                    </div>
+                    <div class="metric-label">CPU LOAD</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-circle">
+                        <div class="metric-value" id="ram-val">0%</div>
+                    </div>
+                    <div class="metric-label">RAM USAGE</div>
+                </div>
+            </div>
+
+            <div class="panel-header" style="border-top: 1px solid rgba(255, 255, 255, 0.05);"><i>🏁</i> TOP PROCESSES
+            </div>
+            <div class="process-list" id="process-list">
+                <div class="process-item header">
+                    <span>APP NAME</span>
+                    <span>CPU</span>
+                    <span>MEM</span>
+                </div>
+                <!-- Mock Processes to match image -->
+                <div class="process-item">
+                    <span>Code Helper (GPU)</span>
+                    <span>16.4%</span>
+                    <span>1.2%</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- CENTER COLUMN -->
+        <div class="center-column">
+            <div class="panel core-system" id="orb-container">
+                <div class="panel-header"
+                    style="position: absolute; top: 0; left: 0; right: 0; border: none; background: transparent;">
+                    <i>🌐</i> CORE SYSTEM <span style="font-size: 8px; opacity: 0.5;">FREQ: 2.4 - 5.0 GHZ</span>
+                </div>
+
+                <div class="orb-outer">
+                    <div class="orb-particle-sphere"></div>
+                </div>
+
+                <div class="footer-label">CREATED WITH ❤️ BY ABDUL MOIZ</div>
+
+                <div class="controls-dock">
+                    <button class="btn-action" title="Camera" id="cam-btn">📹</button>
+                    <button class="btn-action end-call" id="voice-btn">
+                        <span style="font-size: 20px;">⏹️</span> STOP
+                    </button>
+                    <button class="btn-action" title="Mic Settings" id="mic-btn">🎤</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT COLUMN -->
+        <div class="panel transcript-panel">
+            <div class="panel-header"><i>📝</i> TRANSCRIPT <span style="opacity: 0.3;">v7.0.1</span></div>
+            <div class="chat-container" id="chat-box">
+                <div class="msg-block">
+                    <div class="msg-header">JARVIS</div>
+                    <div class="msg-content">System is ready. How can I assist you today?</div>
+                </div>
+            </div>
+            <div class="chat-input-area">
+                <input type="text" placeholder="Access commands..." id="chat-input">
+            </div>
+        </div>
+    </main>
+
+    
+
+    <!-- SETTINGS MODAL -->
+    <div id="settings-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>SYSTEM SETTINGS</div>
+                <button id="close-settings" class="close-btn">?</button>
+            </div>
+            <div class="modal-body">
+                <div class="setting-group">
+                    <label>SYSTEM ACCESS</label>
+                    <button id="manage-access" class="btn-save" style="width: 100%;">MANAGE ACCESS</button>
+                </div>
+                <div class="setting-group">
+                    <label>PERMISSION SCOPES</label>
+                    <div class="toggle-row">
+                        <span>Browser control</span>
+                        <input type="checkbox" id="perm-browser">
+                    </div>
+                    <div class="toggle-row">
+                        <span>File access</span>
+                        <input type="checkbox" id="perm-files">
+                    </div>
+                    <div class="toggle-row">
+                        <span>Automation (typing/click)</span>
+                        <input type="checkbox" id="perm-automation">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ONBOARDING MODAL -->
+    <div id="onboard-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>FIRST-TIME ACCESS</div>
+            </div>
+            <div class="modal-body">
+                <div class="confirm-text">
+                    Jarvis ko full system access chahiye taake apps, browser, automation aur files ko control kar sake.
+                    Aap limited mode select kar sakte hain (automation off).
+                </div>
+                <div class="confirm-tag">You can change this later in settings.</div>
+            </div>
+            <div class="modal-footer">
+                <button id="onboard-limited" class="btn-cancel">LIMITED MODE</button>
+                <button id="onboard-allow" class="btn-save">ALLOW FULL ACCESS</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CONFIRMATION MODAL -->
+    <div id="confirm-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>CONFIRM ACTION</div>
+            </div>
+            <div class="modal-body">
+                <div class="confirm-text" id="confirm-text">Confirmation needed.</div>
+                <div class="confirm-tag" id="confirm-tag">ACTION</div>
+            </div>
+            <div class="modal-footer">
+                <button id="confirm-deny" class="btn-cancel">DENY</button>
+                <button id="confirm-allow" class="btn-save">ALLOW</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- TABS LOGIC ---
+        const tabs = document.querySelectorAll('.nav-tab');
+        const mainGrid = document.querySelector('.dashboard-grid');
+
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                // Remove active from all
+                tabs.forEach(t => t.classList.remove('active'));
+                // Add to clicked
+                tab.classList.add('active');
+
+                const tabName = tab.textContent;
+                if (tabName !== "Dashboard") {
+                    // Show notification
+                    const notif = document.createElement('div');
+                    notif.style.position = "fixed";
+                    notif.style.bottom = "100px";
+                    notif.style.left = "50%";
+                    notif.style.transform = "translateX(-50%)";
+                    notif.style.background = "rgba(0, 242, 255, 0.1)";
+                    notif.style.border = "1px solid var(--neon-cyan)";
+                    notif.style.padding = "10px 20px";
+                    notif.style.borderRadius = "8px";
+                    notif.style.color = "#fff";
+                    notif.style.fontFamily = "var(--font-tech)";
+                    notif.style.zIndex = "1000";
+                    notif.innerText = `MODULE '${tabName.toUpperCase()}' INITIALIZING...`;
+                    document.body.appendChild(notif);
+
+                    setTimeout(() => notif.remove(), 2000);
+                }
+            });
+        });
+
+        const chatInput = document.getElementById('chat-input');
+        const chatBox = document.getElementById('chat-box');
+        const orbContainer = document.getElementById('orb-container');
+        const modeLabel = document.getElementById('nav-mode');
+        const micBtn = document.getElementById('mic-btn');
+        const cpuVal = document.getElementById('cpu-val');
+        const ramVal = document.getElementById('ram-val');
+        const processList = document.getElementById('process-list');
+        const voiceBtn = document.getElementById('voice-btn'); // Ensure this ID matches HTML
+        const camBtn = document.getElementById('cam-btn');
+        const cameraFeed = document.getElementById('camera-feed');
+        const cameraPlaceholder = document.getElementById('camera-placeholder');
+        const settingsBtn = document.getElementById('settings-btn');
+        const settingsModal = document.getElementById('settings-modal');
+        const closeSettings = document.getElementById('close-settings');
+        const manageAccess = document.getElementById('manage-access');
+        const permBrowser = document.getElementById('perm-browser');
+        const permFiles = document.getElementById('perm-files');
+        const permAutomation = document.getElementById('perm-automation');
+        const onboardModal = document.getElementById('onboard-modal');
+        const onboardAllow = document.getElementById('onboard-allow');
+        const onboardLimited = document.getElementById('onboard-limited');
+        const confirmModal = document.getElementById('confirm-modal');
+        const confirmText = document.getElementById('confirm-text');
+        const confirmTag = document.getElementById('confirm-tag');
+        const confirmAllow = document.getElementById('confirm-allow');
+        const confirmDeny = document.getElementById('confirm-deny');
+
+        let mediaStream = null;
+        let isMicEnabled = false;
+        let pendingConfirm = null;
+
+        // WebSocket Setup
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+
+        ws.onopen = () => console.log("NEURAL LINK ESTABLISHED");
+
+        ws.onmessage = (event) => {
+            const msg = JSON.parse(event.data);
+            const { type, data } = msg;
+
+            if (type === "transcript") {
+                appendMsg(data.role, data.text);
+            } else if (type === "partial_transcript") {
+                appendPartial(data.role, data.text);
+            } else if (type === "status") {
+                updateStatus(data);
+                // Update mic button visual state based on backend status
+                if (data.toLowerCase().includes("listening")) {
+                    isMicEnabled = true;
+                    micBtn.style.borderColor = "var(--neon-blue)";
+                    micBtn.style.boxShadow = "0 0 15px rgba(0, 210, 255, 0.4)";
+                } else {
+                    isMicEnabled = false;
+                    micBtn.style.borderColor = "rgba(255, 255, 255, 0.1)";
+                    micBtn.style.boxShadow = "none";
+                }
+            } else if (type === "metrics") {
+                if (data.cpu) cpuVal.textContent = data.cpu + "%";
+                if (data.ram) ramVal.textContent = data.ram + "%";
+            } else if (type === "processes") {
+                updateProcessList(data);
+            } else if (type === "confirm_request") {
+                showConfirm(data);
+            } else if (type === "confirm_resolved") {
+                if (pendingConfirm && data && pendingConfirm.id === data.id) {
+                    confirmModal.style.display = 'none';
+                    pendingConfirm = null;
+                }
+            }
+        };
+
+        function appendMsg(role, text) {
+            // Remove any pending partial
+            const existingPartial = document.querySelector('.msg-block.jarvis.partial');
+            if (existingPartial) existingPartial.remove();
+
+            const block = document.createElement('div');
+            block.className = `msg-block ${role.toLowerCase()}`;
+
+            const header = document.createElement('div');
+            header.className = `msg-header ${role.toLowerCase()}`;
+            header.textContent = role.toUpperCase();
+
+            const content = document.createElement('div');
+            content.className = "msg-content";
+            content.textContent = text;
+
+            block.append(header, content);
+            chatBox.appendChild(block);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function appendPartial(role, text) {
+            let block = document.querySelector('.msg-block.jarvis.partial');
+            if (!block) {
+                block = document.createElement('div');
+                block.className = "msg-block jarvis partial";
+                const header = document.createElement('div');
+                header.className = "msg-header";
+                header.textContent = "JARVIS (TYPING...)";
+                const content = document.createElement('div');
+                content.className = "msg-content";
+                block.append(header, content);
+                chatBox.appendChild(block);
+            }
+            block.querySelector('.msg-content').textContent += text;
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function updateStatus(status) {
+            const s = status.toLowerCase();
+            modeLabel.textContent = status.toUpperCase();
+            orbContainer.classList.remove('listening', 'thinking', 'speaking');
+
+            if (s.includes("listening")) orbContainer.classList.add('listening');
+            else if (s.includes("thinking")) orbContainer.classList.add('thinking');
+            else if (s.includes("speaking")) orbContainer.classList.add('speaking');
+        }
+
+        function updateProcessList(pList) {
+            // Keep header
+            processList.innerHTML = `
+                <div class="process-item header">
+                    <span>APP NAME</span>
+                    <span>CPU</span>
+                    <span>MEM</span>
+                </div>
+            `;
+
+            pList.forEach(p => {
+                const row = document.createElement('div');
+                row.className = 'process-item';
+                row.innerHTML = `
+                    <span>${p.name}</span>
+                    <span>${p.cpu}%</span>
+                    <span>${p.mem}%</span>
+                `;
+                processList.appendChild(row);
+            });
+        }
+
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && chatInput.value.trim() !== "") {
+                const val = chatInput.value;
+                chatInput.value = "";
+                // Removed optimistic appendMsg("USER", val) to prevent duplication
+                ws.send(JSON.stringify({ "type": "chat", "data": val }));
+            }
+        });
+
+        // --- Camera Logic ---
+        async function startCamera() {
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                cameraFeed.srcObject = mediaStream;
+                cameraFeed.style.display = 'block';
+                cameraPlaceholder.style.display = 'none';
+
+                camBtn.style.color = "var(--neon-green)";
+                camBtn.style.borderColor = "var(--neon-green)";
+                camBtn.style.boxShadow = "0 0 15px rgba(57, 255, 20, 0.4)";
+            } catch (err) {
+                console.error("Camera Error:", err);
+                alert("Camera access denied or missing.");
+            }
+        }
+
+        function stopCamera() {
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+                mediaStream = null;
+            }
+            cameraFeed.srcObject = null;
+            cameraFeed.style.display = 'none';
+            cameraPlaceholder.style.display = 'flex';
+
+            camBtn.style.color = "#fff";
+            camBtn.style.borderColor = "rgba(255, 255, 255, 0.1)";
+            camBtn.style.boxShadow = "none";
+        }
+
+        if (camBtn) {
+            camBtn.addEventListener('click', () => {
+                if (mediaStream) {
+                    stopCamera();
+                } else {
+                    startCamera();
+                }
+            });
+        }
+
+        if (voiceBtn) {
+            voiceBtn.addEventListener('click', () => {
+                // Force disable Mic
+                ws.send(JSON.stringify({ "type": "mic_toggle", "data": false }));
+                // Also Stop Camera (User Request)
+                stopCamera();
+            });
+        }
+
+        // Remove old Mute logic if still lingering or update it
+        // We replaced Mute btn with Cam btn in HTML, so muteBtn is now null.
+        // We should cleanup if desired, but JS is robust to null.
+
+        micBtn.addEventListener('click', () => {
+            isMicEnabled = !isMicEnabled;
+            ws.send(JSON.stringify({ "type": "mic_toggle", "data": isMicEnabled }));
+
+            // Visual feedback
+            if (isMicEnabled) {
+                micBtn.style.borderColor = "var(--neon-blue)";
+                micBtn.style.boxShadow = "0 0 15px rgba(0, 210, 255, 0.4)";
+            } else {
+                micBtn.style.borderColor = "rgba(255, 255, 255, 0.1)";
+                micBtn.style.boxShadow = "none";
+            }
+        });
+
+        function showToast(text, isError = false) {
+            const toast = document.createElement('div');
+            toast.className = isError ? "error-toast" : "success-toast";
+            toast.textContent = text;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        function applyAccessState(state) {
+            const profile = String(state.permission_profile || "basic").toLowerCase();
+            const granted = state.system_access_granted !== undefined
+                ? Boolean(state.system_access_granted)
+                : (profile === "power" || profile === "admin");
+            const scopes = state.access_scopes || {};
+            const browserVal = scopes.browser !== undefined ? scopes.browser : granted;
+            const filesVal = scopes.files !== undefined ? scopes.files : granted;
+            const automationVal = scopes.automation !== undefined ? scopes.automation : granted;
+            if (permBrowser) permBrowser.checked = Boolean(browserVal);
+            if (permFiles) permFiles.checked = Boolean(filesVal);
+            if (permAutomation) permAutomation.checked = Boolean(automationVal);
+            if (permBrowser) permBrowser.disabled = !granted;
+            if (permFiles) permFiles.disabled = !granted;
+            if (permAutomation) permAutomation.disabled = !granted;
+        }
+
+        async function loadAccessSettings() {
+            try {
+                const res = await fetch('/api/super/state');
+                if (!res.ok) return;
+                const payload = await res.json();
+                applyAccessState(payload.state || {});
+            } catch (err) {
+                console.warn("Access settings load failed", err);
+            }
+        }
+
+        async function updateAccessScopes() {
+            try {
+                const payload = {
+                    access_scopes: {
+                        browser: permBrowser ? permBrowser.checked : false,
+                        files: permFiles ? permFiles.checked : false,
+                        automation: permAutomation ? permAutomation.checked : false
+                    }
+                };
+                const res = await fetch('/api/super/access', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    showToast("PERMISSIONS UPDATED");
+                }
+            } catch (err) {
+                showToast("PERMISSIONS UPDATE FAILED", true);
+            }
+        }
+
+        async function checkOnboarding() {
+            try {
+                const res = await fetch('/api/super/state');
+                if (!res.ok) return;
+                const payload = await res.json();
+                const state = payload.state || {};
+                const profile = String(state.permission_profile || "basic").toLowerCase();
+                const granted = state.system_access_granted !== undefined
+                    ? Boolean(state.system_access_granted)
+                    : (profile === "power" || profile === "admin");
+                const prompted = state.system_access_prompted !== undefined ? Boolean(state.system_access_prompted) : granted;
+                if (!prompted && onboardModal) {
+                    onboardModal.style.display = 'flex';
+                }
+            } catch (err) {
+                console.warn("Onboarding check failed", err);
+            }
+        }
+
+        async function submitOnboarding(grant) {
+            try {
+                const payload = {
+                    permission_profile: grant ? "power" : "basic",
+                    allowlist_users: ["local-admin"],
+                    connect_channels: [],
+                    grant_system_access: Boolean(grant)
+                };
+                const res = await fetch('/api/super/onboard', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    if (onboardModal) onboardModal.style.display = 'none';
+                    showToast(grant ? "FULL ACCESS ENABLED" : "LIMITED MODE ACTIVE");
+                    loadAccessSettings();
+                }
+            } catch (err) {
+                showToast("ONBOARDING FAILED", true);
+            }
+        }
+
+        function showConfirm(data) {
+            pendingConfirm = data || null;
+            if (!pendingConfirm || !confirmModal) return;
+            confirmText.textContent = pendingConfirm.prompt || "Confirm?";
+            confirmTag.textContent = (pendingConfirm.kind || "action").toUpperCase();
+            confirmModal.style.display = 'flex';
+        }
+
+        function respondConfirm(approved) {
+            if (!pendingConfirm) return;
+            ws.send(JSON.stringify({
+                type: "confirm_response",
+                data: { id: pendingConfirm.id, approved: Boolean(approved) }
+            }));
+            if (confirmModal) confirmModal.style.display = 'none';
+            pendingConfirm = null;
+        }
+
+        function registerServiceWorker() {
+            if (!('serviceWorker' in navigator)) return;
+            navigator.serviceWorker.register('/static/sw.js')
+                .then(() => console.log("Service worker registered"))
+                .catch((err) => console.warn("Service worker failed", err));
+        }
+
+        if (settingsBtn) {
+            settingsBtn.addEventListener('click', () => {
+                if (settingsModal) settingsModal.style.display = 'flex';
+                loadAccessSettings();
+            });
+        }
+
+        if (closeSettings) {
+            closeSettings.addEventListener('click', () => {
+                if (settingsModal) settingsModal.style.display = 'none';
+            });
+        }
+
+        if (manageAccess) {
+            manageAccess.addEventListener('click', () => {
+                if (settingsModal) settingsModal.style.display = 'none';
+                if (onboardModal) onboardModal.style.display = 'flex';
+            });
+        }
+
+        if (permBrowser) permBrowser.addEventListener('change', updateAccessScopes);
+        if (permFiles) permFiles.addEventListener('change', updateAccessScopes);
+        if (permAutomation) permAutomation.addEventListener('change', updateAccessScopes);
+
+        if (confirmAllow) confirmAllow.addEventListener('click', () => respondConfirm(true));
+        if (confirmDeny) confirmDeny.addEventListener('click', () => respondConfirm(false));
+        if (onboardAllow) onboardAllow.addEventListener('click', () => submitOnboarding(true));
+        if (onboardLimited) onboardLimited.addEventListener('click', () => submitOnboarding(false));
+
+        window.addEventListener('load', () => {
+            checkOnboarding();
+            registerServiceWorker();
+        });
+
+    </script>
+</body>
+
+</html>

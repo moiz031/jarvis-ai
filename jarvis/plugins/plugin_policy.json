@@ -1,0 +1,23 @@
+{
+  "enabled_plugins": [
+    "system_plugin",
+    "capability_evolver"
+  ],
+  "blocked_imports": [
+    "ctypes",
+    "multiprocessing",
+    "os",
+    "socket",
+    "subprocess",
+    "sys"
+  ],
+  "blocked_builtins": [
+    "eval",
+    "exec",
+    "compile",
+    "__import__",
+    "open",
+    "input",
+    "breakpoint"
+  ]
+}

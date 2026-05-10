@@ -4,9 +4,13 @@ import os
 import base64
 import uuid
 import logging
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from cryptography.fernet import Fernet
+
+try:
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+    from cryptography.fernet import Fernet
+except Exception:
+    hashes = PBKDF2HMAC = Fernet = None
 
 logger = logging.getLogger(__name__)
 
@@ -15,10 +19,16 @@ class SecretsManager:
     
     def __init__(self):
         self.key = self._generate_key()
-        self.fernet = Fernet(self.key)
+        self.fernet = Fernet(self.key) if (Fernet is not None and self.key) else None
+        if self.fernet is None:
+            logger.warning(
+                "cryptography is unavailable. Secret encryption is disabled until the dependency is installed."
+            )
         
     def _generate_key(self):
         """Generate a machine-specific key using hardware UUID."""
+        if hashes is None or PBKDF2HMAC is None:
+            return None
         # Get machine UUID (unique to the hardware)
         machine_id = str(uuid.getnode())
         salt = b'jarvis_secure_salt_2025' # Fixed salt for consistency across restarts
@@ -36,6 +46,9 @@ class SecretsManager:
         """Encrypt a string value."""
         if not value:
             return value
+        if self.fernet is None:
+            logger.warning("Skipping secret encryption because cryptography is unavailable.")
+            return value
         encrypted = self.fernet.encrypt(value.encode()).decode()
         return f"ENC:{encrypted}"
 
@@ -43,6 +56,9 @@ class SecretsManager:
         """Decrypt a value if it starts with 'ENC:' prefix."""
         if not isinstance(encrypted_value, str) or not encrypted_value.startswith("ENC:"):
             return encrypted_value
+        if self.fernet is None:
+            logger.warning("Cannot decrypt encrypted secret without cryptography. Returning None.")
+            return None
         
         try:
             token = encrypted_value[4:] # Remove 'ENC:'

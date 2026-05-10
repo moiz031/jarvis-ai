@@ -9,7 +9,7 @@ class TestConfig(unittest.TestCase):
 
     def test_config_initialization(self):
         self.assertIsNotNone(self.config.WAKE_PHRASE)
-        self.assertIn("Jarvis", self.config.WAKE_PHRASE)
+        self.assertIn("jarvis", self.config.WAKE_PHRASE.lower())
 
     def test_paths_exist(self):
         # These paths are created in Config.__init__.

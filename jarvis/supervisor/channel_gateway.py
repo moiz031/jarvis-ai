@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
+
+import requests
 
 from .schemas import ChannelMessage
 from .state_store import load_json, save_json
@@ -33,19 +36,143 @@ class BaseChannelAdapter:
 
 
 class EmailAdapter(BaseChannelAdapter):
-    pass
+    def connect(self):
+        smtp_host = self.settings.get("smtp_host") or os.getenv("SMTP_HOST")
+        smtp_port = int(self.settings.get("smtp_port") or os.getenv("SMTP_PORT", "587"))
+        smtp_user = self.settings.get("smtp_user") or os.getenv("SMTP_USER")
+        smtp_password = self.settings.get("smtp_password") or os.getenv("SMTP_PASSWORD")
+        from_email = self.settings.get("from_email") or smtp_user
+
+        if not smtp_host or not smtp_user or not smtp_password or not from_email:
+            self.connected = False
+            return {
+                "ok": False,
+                "channel": self.name,
+                "error": "Missing SMTP settings (host/user/password/from_email).",
+            }
+
+        self.settings["smtp_port"] = smtp_port
+        self.settings["from_email"] = from_email
+        self.connected = True
+        return {"ok": True, "channel": self.name}
+
+    def send(self, target: str, text: str):
+        if not self.connected:
+            return {"ok": False, "error": f"{self.name} is not connected."}
+        try:
+            import smtplib
+            from email.message import EmailMessage
+
+            host = self.settings.get("smtp_host") or os.getenv("SMTP_HOST")
+            port = int(self.settings.get("smtp_port") or os.getenv("SMTP_PORT", "587"))
+            user = self.settings.get("smtp_user") or os.getenv("SMTP_USER")
+            password = self.settings.get("smtp_password") or os.getenv("SMTP_PASSWORD")
+            from_email = self.settings.get("from_email") or user
+            subject = self.settings.get("subject") or "Jarvis Notification"
+
+            msg = EmailMessage()
+            msg["From"] = from_email
+            msg["To"] = target
+            msg["Subject"] = subject
+            msg.set_content(text)
+
+            with smtplib.SMTP(host, port, timeout=10) as server:
+                server.starttls()
+                server.login(user, password)
+                server.send_message(msg)
+
+            return {"ok": True, "channel": self.name, "target": target, "text": text}
+        except Exception as exc:
+            return {"ok": False, "channel": self.name, "error": str(exc)}
 
 
 class TelegramAdapter(BaseChannelAdapter):
-    pass
+    def connect(self):
+        token = self.settings.get("bot_token") or os.getenv("TELEGRAM_BOT_TOKEN")
+        if not token:
+            self.connected = False
+            return {"ok": False, "channel": self.name, "error": "Missing Telegram bot token."}
+        self.settings["bot_token"] = token
+        self.connected = True
+        return {"ok": True, "channel": self.name}
+
+    def send(self, target: str, text: str):
+        if not self.connected:
+            return {"ok": False, "error": f"{self.name} is not connected."}
+        token = self.settings.get("bot_token")
+        chat_id = target or self.settings.get("default_chat_id")
+        if not chat_id:
+            return {"ok": False, "channel": self.name, "error": "Missing Telegram chat id target."}
+        try:
+            resp = requests.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                json={"chat_id": chat_id, "text": text},
+                timeout=10,
+            )
+            if not resp.ok:
+                return {"ok": False, "channel": self.name, "error": f"Telegram API error: {resp.text}"}
+            return {"ok": True, "channel": self.name, "target": str(chat_id), "text": text}
+        except Exception as exc:
+            return {"ok": False, "channel": self.name, "error": str(exc)}
 
 
 class DiscordAdapter(BaseChannelAdapter):
-    pass
+    def connect(self):
+        webhook_url = self.settings.get("webhook_url") or os.getenv("DISCORD_WEBHOOK_URL")
+        if not webhook_url:
+            self.connected = False
+            return {"ok": False, "channel": self.name, "error": "Missing Discord webhook URL."}
+        self.settings["webhook_url"] = webhook_url
+        self.connected = True
+        return {"ok": True, "channel": self.name}
+
+    def send(self, target: str, text: str):
+        if not self.connected:
+            return {"ok": False, "error": f"{self.name} is not connected."}
+        webhook_url = self.settings.get("webhook_url")
+        payload = {"content": text}
+        if target:
+            payload["content"] = f"[{target}] {text}"
+        try:
+            resp = requests.post(webhook_url, json=payload, timeout=10)
+            if resp.status_code not in (200, 204):
+                return {"ok": False, "channel": self.name, "error": f"Discord API error: {resp.text}"}
+            return {"ok": True, "channel": self.name, "target": target, "text": text}
+        except Exception as exc:
+            return {"ok": False, "channel": self.name, "error": str(exc)}
 
 
 class SlackAdapter(BaseChannelAdapter):
-    pass
+    def connect(self):
+        bot_token = self.settings.get("bot_token") or os.getenv("SLACK_BOT_TOKEN")
+        if not bot_token:
+            self.connected = False
+            return {"ok": False, "channel": self.name, "error": "Missing Slack bot token."}
+        self.settings["bot_token"] = bot_token
+        self.connected = True
+        return {"ok": True, "channel": self.name}
+
+    def send(self, target: str, text: str):
+        if not self.connected:
+            return {"ok": False, "error": f"{self.name} is not connected."}
+        bot_token = self.settings.get("bot_token")
+        channel = target or self.settings.get("default_channel")
+        if not channel:
+            return {"ok": False, "channel": self.name, "error": "Missing Slack channel target."}
+
+        try:
+            resp = requests.post(
+                "https://slack.com/api/chat.postMessage",
+                headers={"Authorization": f"Bearer {bot_token}", "Content-Type": "application/json; charset=utf-8"},
+                json={"channel": channel, "text": text},
+                timeout=10,
+            )
+            body = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+            if not resp.ok or not body.get("ok", False):
+                return {"ok": False, "channel": self.name, "error": f"Slack API error: {body or resp.text}"}
+            return {"ok": True, "channel": self.name, "target": channel, "text": text}
+        except Exception as exc:
+            return {"ok": False, "channel": self.name, "error": str(exc)}
 
 
 ADAPTERS = {

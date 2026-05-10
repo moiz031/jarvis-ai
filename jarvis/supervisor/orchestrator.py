@@ -132,6 +132,9 @@ class SuperOrchestrator:
         if raw == "/super status":
             return {"ok": True, "handled": True, "message": "Super status ready.", "data": self.status()}
         if raw == "/super plugins":
+            auth = self._authorize("plugin.list", user_id=user_id, text=raw, metadata=metadata)
+            if not auth.get("ok"):
+                return {"ok": False, "handled": True, "error": auth.get("error")}
             return {"ok": True, "handled": True, "data": self.plugins.list_plugins()}
         if raw == "/super jobs":
             return {"ok": True, "handled": True, "data": self.workers.list_jobs(limit=30)}
@@ -154,6 +157,9 @@ class SuperOrchestrator:
             data = self.send_channel_message(channel, target, msg, user_id=user_id, metadata=metadata)
             return {"ok": data.get("ok", False), "handled": True, "data": data}
         if raw.startswith("/plugin reload"):
+            auth = self._authorize("plugin.reload", user_id=user_id, text=raw, metadata=metadata)
+            if not auth.get("ok"):
+                return {"ok": False, "handled": True, "error": auth.get("error"), "step_up_required": auth.get("step_up_required", False)}
             loaded, errors = self.plugins.reload()
             return {"ok": True, "handled": True, "data": {"loaded": loaded, "errors": errors}}
         if raw.startswith("/plugin run "):

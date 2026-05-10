@@ -1,0 +1,23 @@
+{
+  "enabled_plugins": [
+    "system_plugin",
+    "home_automation"
+  ],
+  "blocked_imports": [
+    "ctypes",
+    "multiprocessing",
+    "os",
+    "socket",
+    "subprocess",
+    "sys"
+  ],
+  "blocked_builtins": [
+    "eval",
+    "exec",
+    "compile",
+    "__import__",
+    "open",
+    "input",
+    "breakpoint"
+  ]
+}

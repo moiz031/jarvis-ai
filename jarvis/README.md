@@ -24,48 +24,77 @@ A local-first, bilingual (Urdu + English) voice assistant that runs on your lapt
 ### 1. Install Dependencies
 Open a terminal in this folder and run:
 ```powershell
-pip install -r jarvis/requirements-enhanced.txt
+pip install -r jarvis/requirements.txt
 playwright install chromium
 ```
 
 ### 2. Setup Ollama
 Ensure Ollama is running, then pull the required models:
 ```powershell
-ollama pull qwen2.5:7b-instruct
-ollama pull llama3.1:8b-instruct
+ollama pull llama3.2:1b
+ollama pull qwen2.5:3b
 ```
 
 ### 3. Setup Local TTS (Piper)
-Download the Urdu model (optional but recommended for local mode):
-1. Download `ur_urdu-medium.onnx` and `ur_urdu-medium.onnx.json` from [Piper Voices](https://github.com/rhasspy/piper/releases).
-2. Place them in a folder logic `models/` inside `jarvis/`.
-3. Rename them to `ur_urdu.piper` and `ur_urdu.piper.json` (or strictly match config).
-   *Note: The code defaults to looking for `models/ur_urdu.piper`. You may need to adjust `tts_local.py` or just skip this if using ElevenLabs.*
+Piper models are auto-downloaded by `tts_local.py` when first needed.
+If you want to pre-download manually, place these exact filenames in `jarvis/models/`:
+1. `ur_PK-dune-medium.onnx` and `ur_PK-dune-medium.onnx.json` (for Urdu voice)
+2. `en_US-lessac-medium.onnx` and `en_US-lessac-medium.onnx.json` (for English fallback)
 
 ### 4. Cloud Configuration (Optional)
-The system is pre-configured with keys in `.env`.
-To change them, edit the `.env` file directly.
+The system is pre-configured with placeholders in `.env`.
+For production, add your API keys:
+- `OPENAI_API_KEY`: OpenAI/OpenRouter API key (for cloud fallback)
+- `ELEVENLABS_API_KEY`: ElevenLabs API key (for premium voice quality)
+**Security Note**: Never commit API keys to git. Use environment variables in production.
 
 ## Running the Assistant
-1. **Start the Assistant**:
+
+### Quick Start
+1. **Start Backend**:
    ```powershell
    python jarvis/main.py
    ```
 2. **Wake Word**: Say **"Jarvis, let's start"**.
 3. **Stop**: Say **"Jarvis stop"** or press `Ctrl+Shift+K` to kill the process.
 
-### Desktop vs Browser UI
-- **Desktop App (native window)**:
-  ```powershell
-  python JARVIS.py
-  ```
-- **Browser UI (localhost)**:
-  ```powershell
-  python JARVIS.py --browser
-  ```
-- **Quick launchers**:
-  - `Launch_JARVIS.bat` (desktop app)
-  - `Launch_JARVIS_Browser.bat` (browser UI)
+### Desktop App (Electron)
+For the full desktop experience with UI:
+```powershell
+npm install
+npm start
+```
+
+### Browser UI
+Access via `http://localhost:8080` once backend is running.
+
+## Build Windows Desktop App (No Console)
+This produces a normal Windows app (double-clickable) with background commands hidden.
+
+```powershell
+pip install pyinstaller
+python build_jarvis.py
+```
+
+Result:
+- `dist/JarvisAI/JarvisAI.exe`
+
+Optional release folder:
+```powershell
+python deploy_release.py
+```
+
+## Build Installer (Setup.exe)
+This creates a proper Windows installer (like other software), with no console window.
+
+```powershell
+npm install
+pip install pyinstaller
+npm run dist
+```
+
+Output:
+- `dist/Jarvis AI Setup.exe`
 
 ### Android / Mobile Access
 1. Start Jarvis on your Windows machine.

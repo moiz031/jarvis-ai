@@ -74,6 +74,9 @@ class GoogleDriveIntegration(CloudStorageIntegration):
     def upload_file(self, local_path: str, remote_path: str = "/"):
         if not self.authenticated:
             return "Google Drive not authenticated"
+        if self.service is None:
+            logger.error("Google Drive service is not initialized.")
+            return "Google Drive service is not initialized."
 
         try:
             from googleapiclient.http import MediaFileUpload
@@ -97,6 +100,10 @@ class GoogleDriveIntegration(CloudStorageIntegration):
         try:
             import io
             from googleapiclient.http import MediaIoBaseDownload
+
+            if self.service is None:
+                logger.error("Google Drive service is not initialized.")
+                return "Google Drive service is not initialized."
 
             local = Path(local_path)
             local.parent.mkdir(parents=True, exist_ok=True)

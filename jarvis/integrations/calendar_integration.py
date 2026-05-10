@@ -52,7 +52,7 @@ class CalendarIntegration:
 
     def create_event(self, title: str, start_time: str, end_time: str, description: str = ""):
         """Create a calendar event."""
-        if not self.authenticated:
+        if not self.authenticated or self.service is None:
             return "Calendar not authenticated"
         
         try:
@@ -74,7 +74,7 @@ class CalendarIntegration:
 
     def get_upcoming_events(self, days: int = 7):
         """Get upcoming events."""
-        if not self.authenticated:
+        if not self.authenticated or self.service is None:
             return []
         
         try:
@@ -104,7 +104,7 @@ class CalendarIntegration:
 
     def check_availability(self, start_time: str, end_time: str) -> bool:
         """Check if a time slot is available."""
-        if not self.authenticated:
+        if not self.authenticated or self.service is None:
             return True
         
         try:

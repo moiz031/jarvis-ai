@@ -3,11 +3,17 @@
 import os
 from pathlib import Path
 
+
+def _user_home() -> Path:
+    profile = os.getenv("USERPROFILE")
+    return Path(profile) if profile else Path.home()
+
+
 # Allow access only to specific roots
 ALLOWED_ROOTS = [
-    Path(os.environ["USERPROFILE"]) / "Desktop",
-    Path(os.environ["USERPROFILE"]) / "Documents",
-    Path(os.environ["USERPROFILE"]) / "Downloads",
+    _user_home() / "Desktop",
+    _user_home() / "Documents",
+    _user_home() / "Downloads",
 ]
 
 def _is_safe_path(path_str):
@@ -52,7 +58,7 @@ def write_file(path: str, content: str) -> str:
     except Exception as e:
         return f"Error writing file: {e}"
 
-def search_files(query: str, root_str: str = None) -> list:
+def search_files(query: str, root_str: str | None = None) -> list:
     root = Path(root_str) if root_str else ALLOWED_ROOTS[0] # Default to Desktop
     if not _is_safe_path(str(root)):
         return ["Error: Access denied to root."]

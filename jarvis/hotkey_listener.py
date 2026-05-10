@@ -3,7 +3,10 @@
 import keyboard
 import threading
 import time
-from config import Config
+try:
+    from config import Config
+except ImportError:
+    from .config import Config
 
 class HotkeyListener:
     """
@@ -39,14 +42,18 @@ class HotkeyListener:
         print("\n[Hotkey] [KILL] KILL SWITCH ACTIVATED")
         # Stop TTS
         if hasattr(self.core, 'tts'):
+            try:
+                self.core.tts.stop()
+            except Exception:
+                pass
             self.core.tts.active = False
-            self.core.tts.audio_queue.queue.clear()
-            # If playing via sounddevice or subprocess, we might need a harder stop.
-            # But clearing queue is a good start.
         
         # Stop STT
         if hasattr(self.core, 'stt'):
-            self.core.stt.active = False
+            try:
+                self.core.stt.shutdown()
+            except Exception:
+                self.core.stt.active = False
         
         # Reset Core State
         self.core.is_processing = False

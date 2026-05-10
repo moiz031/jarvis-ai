@@ -7,7 +7,7 @@ on:
     branches: [ main, master ]
 
 jobs:
-  lint-and-test:
+  lint-test-build:
     runs-on: windows-latest
 
     steps:
@@ -26,13 +26,18 @@ jobs:
         cache: 'pip'
 
     - name: Install Node.js dependencies
-      run: npm install
+      run: npm ci
 
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r jarvis/requirements.txt
-        pip install pytest flake8 black
+        pip install requests fastapi==0.95.2 uvicorn==0.22.0 pytest flake8 black psutil numpy pillow pyttsx3 sounddevice cryptography pyinstaller==6.16.0
+
+    - name: Python Syntax Smoke
+      run: python -m py_compile JARVIS.py jarvis/main.py jarvis/core_engine.py jarvis/agent.py jarvis/web_server.py
+
+    - name: Node Syntax Smoke
+      run: node --check main.js
 
     - name: Run JS Lint
       run: npm run lint
@@ -41,7 +46,25 @@ jobs:
       run: flake8 jarvis tests --max-line-length=120 --exclude=__pycache__,.venv
 
     - name: Run Python Tests
-      run: pytest tests/
+      run: npm test
 
-    - name: Build Electron App (Smoke Test)
-      run: npm run build
+    - name: Source Backend Health Smoke
+      shell: pwsh
+      run: |
+        $proc = Start-Process -FilePath python -ArgumentList "jarvis/main.py" -WorkingDirectory "$PWD" -PassThru
+        try {
+          Start-Sleep -Seconds 18
+          $resp = Invoke-WebRequest -Uri "http://127.0.0.1:8080/health" -UseBasicParsing -TimeoutSec 10
+          if ($resp.StatusCode -ne 200) { throw "Health check failed with status $($resp.StatusCode)" }
+        } finally {
+          if (!$proc.HasExited) { Stop-Process -Id $proc.Id -Force }
+        }
+
+    - name: Build Backend Executable
+      run: python build_backend.py
+
+    - name: Verify Backend Executable
+      run: python scripts/verify_backend_build.py
+
+    - name: Verify Electron Packaging
+      run: npx --no-install electron-builder --win portable --x64 --publish never

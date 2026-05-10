@@ -7,6 +7,15 @@ python-dotenv
 playwright
 colorama
 pyautogui
+faster-whisper
+sounddevice
+numpy
+keyboard
+requests
+python-dotenv
+playwright
+colorama
+pyautogui
 opencv-python
 pillow
 customtkinter
@@ -23,6 +32,7 @@ pywhatkit
 pyttsx3
 pymupdf
 wikipedia
+edge-tts
 
 pywebview
 pystray
@@ -33,3 +43,13 @@ sentence-transformers
 
 cryptography
 flask
+
+# Test and lint tooling
+pytest
+flake8
+black
+
+# Optional integrations imported by jarvis.integrations package
+google-api-python-client
+google-auth
+google-auth-oauthlib

@@ -25,9 +25,10 @@ class PolicyEngine:
                     "system.status",
                     "channel.receive",
                     "plugin.list",
+                    "plugin.reload",
                     "worker.status",
                 },
-                "require_step_up": {"browser.task", "files.write"},
+                "require_step_up": {"browser.task", "files.write", "plugin.reload", "plugin.execute"},
             },
             "power": {
                 "allowed_actions": {
@@ -40,11 +41,12 @@ class PolicyEngine:
                     "channel.send",
                     "channel.receive",
                     "plugin.list",
+                    "plugin.reload",
                     "plugin.execute",
                     "worker.schedule",
                     "worker.status",
                 },
-                "require_step_up": {"automation.type", "files.write"},
+                "require_step_up": {"automation.type", "files.write", "plugin.reload", "plugin.execute"},
             },
             "admin": {
                 "allowed_actions": {"*"},
@@ -61,6 +63,8 @@ class PolicyEngine:
             "disable security",
             "credential",
             "password",
+            "plugin reload",
+            "plugin run",
         }
         self.custom_policy = {}
         self.reload()

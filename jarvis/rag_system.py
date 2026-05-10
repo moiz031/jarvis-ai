@@ -17,6 +17,62 @@ except ImportError:
     logger.warning("[WARNING] RAG dependencies not installed. Install: chromadb, sentence-transformers")
     HAS_RAG = False
 
+
+class HybridRAGSystem:
+    """Lightweight local RAG fallback that works without external vector deps."""
+
+    def __init__(self, memory_db):
+        self.memory = memory_db
+
+    def add_knowledge(self, title: str, content: str, session_id: str = "default", tags: Optional[List[str]] = None, source: str = "user"):
+        fn = getattr(self.memory, "add_knowledge", None)
+        if callable(fn):
+            fn(title, content, session_id=session_id, tags=tags or [], source=source)
+
+    def retrieve(self, query: str, session_id: str = "default", limit: int = 5) -> List[Dict[str, Any]]:
+        items: List[Dict[str, Any]] = []
+        search_conversation = getattr(self.memory, "search_conversation", lambda *a, **k: [])
+        search_knowledge = getattr(self.memory, "search_knowledge", lambda *a, **k: [])
+
+        tokens = [tok for tok in query.lower().split() if tok]
+        conv = search_conversation(query, session_id=session_id, limit=limit * 3)
+        know = search_knowledge(query, session_id=session_id, limit=limit * 3)
+
+        for token in tokens:
+            conv.extend(search_conversation(token, session_id=session_id, limit=limit * 2))
+            know.extend(search_knowledge(token, session_id=session_id, limit=limit * 2))
+
+        for item in conv:
+            items.append({
+                "source": item.get("role", "conversation"),
+                "content": item.get("content", ""),
+                "score": self._score(query, item.get("content", "")),
+            })
+        for item in know:
+            items.append({
+                "source": item.get("title", "knowledge"),
+                "content": item.get("content", ""),
+                "score": self._score(query, f"{item.get('title', '')} {item.get('content', '')}"),
+            })
+
+        items.sort(key=lambda x: x["score"], reverse=True)
+        return [item for item in items if item["score"] > 0][:limit]
+
+    def search_knowledge(self, query: str, session_id: str = "default", limit: int = 5) -> List[Dict[str, Any]]:
+        results = self.retrieve(query, session_id=session_id, limit=limit)
+        return [
+            {"title": item.get("source", "knowledge"), "content": item.get("content", "")}
+            for item in results
+        ]
+
+    def _score(self, query: str, content: str) -> float:
+        q_tokens = {tok for tok in query.lower().split() if tok}
+        c_tokens = {tok for tok in content.lower().split() if tok}
+        if not q_tokens or not c_tokens:
+            return 0.0
+        overlap = len(q_tokens & c_tokens)
+        return overlap / float(len(q_tokens))
+
 class RAGSystem:
     """Retrieval-Augmented Generation System for enhanced memory and context."""
     

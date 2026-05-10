@@ -5,7 +5,7 @@ import shutil
 
 # Define paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-ICON_PATH = os.path.join(BASE_DIR, "jarvis_icon.ico")  # We will check if this exists
+ICON_PATH = os.path.join(BASE_DIR, "icon.ico")  # Project icon
 
 # Check if icon exists, otherwise don't use it
 icon_args = []
@@ -33,4 +33,4 @@ PyInstaller.__main__.run([
 ] + icon_args)
 
 print("Build Complete!")
-print("Executable is in 'dist/JarvisAI.exe'")
+print("Executable is in 'dist/JarvisAI/JarvisAI.exe' (onedir build)")

@@ -55,7 +55,7 @@ class GmailIntegration:
 
     def send_email(self, to: str, subject: str, body: str):
         """Send an email."""
-        if not self.authenticated:
+        if not self.authenticated or self.service is None:
             return "Gmail not authenticated"
         
         try:
@@ -80,7 +80,7 @@ class GmailIntegration:
 
     def get_unread_count(self):
         """Get count of unread emails."""
-        if not self.authenticated:
+        if not self.authenticated or self.service is None:
             return 0
         
         try:
@@ -93,7 +93,7 @@ class GmailIntegration:
 
     def read_recent_emails(self, limit: int = 5):
         """Read recent emails."""
-        if not self.authenticated:
+        if not self.authenticated or self.service is None:
             return []
         
         try:

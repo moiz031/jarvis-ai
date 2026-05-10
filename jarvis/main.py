@@ -3,21 +3,58 @@
 import sys
 import os
 import queue
+import threading
 import time
 from pathlib import Path
-from dotenv import load_dotenv
 
-# Add project root to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from dotenv import load_dotenv as _dotenv_load
+except Exception:
+    _dotenv_load = None
 
-from web_server import JarvisWebServer
-from core_engine import CoreEngine
-from logger_config import setup_logging
+# Add project root to path so package imports work in source mode and packaged mode.
+CURRENT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = CURRENT_DIR.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
+try:
+    from jarvis.web_server import JarvisWebServer
+    from jarvis.core_engine import CoreEngine
+    from jarvis.logger_config import setup_logging
+    from jarvis.runtime_support import ensure_ollama_running
+except ImportError:
+    from web_server import JarvisWebServer
+    from core_engine import CoreEngine
+    from logger_config import setup_logging
+    from runtime_support import ensure_ollama_running
 import requests
 import logging
 
 # Setup logging FIRST
 logger = setup_logging()
+
+
+def _load_env_file(path: Path | None = None, override: bool = False) -> bool:
+    if _dotenv_load is not None:
+        return bool(_dotenv_load(dotenv_path=path, override=override))
+    if path is None:
+        path = Path(".env")
+    if not path.exists():
+        return False
+    try:
+        with path.open("r", encoding="utf-8") as fh:
+            for raw in fh:
+                line = raw.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                key = key.strip()
+                value = value.strip().strip('"').strip("'")
+                if key and (override or key not in os.environ):
+                    os.environ[key] = value
+        return True
+    except Exception:
+        return False
 
 def wait_for_ollama(host, retries=5, delay=2):
     """Wait for Ollama to be ready."""
@@ -37,6 +74,22 @@ def wait_for_ollama(host, retries=5, delay=2):
     
     return False
 
+
+def _bool_env(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _probe_ollama_async(host: str) -> None:
+    def probe():
+        if not wait_for_ollama(host, retries=2, delay=1):
+            logger.warning("[WARNING] OLLAMA NOT RUNNING")
+            logger.warning("   Continuing startup. LLM may use fallback or limited mode.")
+
+    threading.Thread(target=probe, daemon=True, name="jarvis-ollama-probe").start()
+
 def main():
     """Main entry point for Jarvis."""
     logger.info("="*60)
@@ -45,10 +98,13 @@ def main():
     
     # Load environment
     logger.info("Loading environment configuration...")
-    load_dotenv()
+    _load_env_file(Path(".env"))
     
     # Import config to trigger profile and secret initialization
-    from config import Config
+    try:
+        from jarvis.config import Config
+    except ImportError:
+        from config import Config
     cfg = Config()
     
     # Hardware checks
@@ -63,9 +119,20 @@ def main():
 
     # Check Ollama
     ollama_host = cfg.OLLAMA_HOST
-    if not wait_for_ollama(ollama_host):
-        logger.warning("[WARNING] OLLAMA NOT RUNNING")
-        logger.warning("   Continuing startup. LLM may use fallback or limited mode.")
+    if getattr(cfg, "OLLAMA_AUTO_START", True):
+        boot = ensure_ollama_running(ollama_host, auto_start=True)
+        if boot.get("started"):
+            logger.info("[OLLAMA] Auto-start requested. started=%s path=%s", boot.get("ok"), boot.get("path"))
+        elif boot.get("reason") == "missing_exe":
+            logger.warning("[OLLAMA] Binary not found. Install Ollama or set OLLAMA_AUTO_START=0.")
+
+    if _bool_env("OLLAMA_STARTUP_BLOCKING", False):
+        if not wait_for_ollama(ollama_host):
+            logger.warning("[WARNING] OLLAMA NOT RUNNING")
+            logger.warning("   Continuing startup. LLM may use fallback or limited mode.")
+    else:
+        logger.info("Ollama probe moved to background for faster startup.")
+        _probe_ollama_async(ollama_host)
     
     # Create communication queues
     logger.info("Creating communication queues...")

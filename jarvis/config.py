@@ -4,7 +4,10 @@ import os
 import sys
 from pathlib import Path
 
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv as _dotenv_load
+except Exception:
+    _dotenv_load = None
 
 try:
     from profiles import get_profile
@@ -20,7 +23,10 @@ except Exception:
 
 if getattr(sys, "frozen", False):
     BASE_DIR = Path(sys._MEIPASS)
-    CONFIG_DIR = Path(sys.executable).parent
+    appdata = os.getenv("APPDATA")
+    if not appdata:
+        appdata = str(Path.home() / "AppData" / "Roaming")
+    CONFIG_DIR = Path(appdata) / "JarvisAI"
 else:
     BASE_DIR = Path(__file__).resolve().parent.parent
     CONFIG_DIR = BASE_DIR
@@ -28,8 +34,29 @@ else:
 ENV_PATH = CONFIG_DIR / ".env"
 if not ENV_PATH.exists():
     ENV_PATH = BASE_DIR / ".env"
+def _load_env_file(path: Path, override: bool = False) -> bool:
+    if _dotenv_load is not None:
+        return bool(_dotenv_load(dotenv_path=path, override=override))
+    if not path.exists():
+        return False
+    try:
+        with path.open("r", encoding="utf-8") as fh:
+            for raw in fh:
+                line = raw.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                key = key.strip()
+                value = value.strip().strip('"').strip("'")
+                if key and (override or key not in os.environ):
+                    os.environ[key] = value
+        return True
+    except Exception:
+        return False
+
+
 if ENV_PATH.exists():
-    load_dotenv(dotenv_path=ENV_PATH)
+    _load_env_file(ENV_PATH)
 
 
 def _auto_profile_name(profile_name: str) -> str:
@@ -55,8 +82,10 @@ def _get_bool(name: str, default: bool) -> bool:
 
 
 class Config:
-    WAKE_PHRASE = "Jarvis, let's start"
-    STOP_PHRASE = "Jarvis stop"
+    _warnings_printed = False
+
+    WAKE_PHRASE = os.getenv("WAKE_PHRASE", "jarvis")
+    STOP_PHRASE = os.getenv("STOP_PHRASE", "jarvis stop")
 
     PROFILE_NAME = _auto_profile_name(os.getenv("JARVIS_PROFILE", "auto"))
     PROFILE = get_profile(PROFILE_NAME)
@@ -65,15 +94,21 @@ class Config:
 
     OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
     OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", PROFILE.llm_model)
+    OLLAMA_AUTO_START = _get_bool("OLLAMA_AUTO_START", True)
     FALLBACK_MODEL = os.getenv("FALLBACK_MODEL", "gpt-4o-mini")
     WHISPER_MODEL = os.getenv("WHISPER_MODEL", PROFILE.whisper_model)
 
     OPENAI_API_KEY = secrets_manager.decrypt(os.getenv("OPENAI_API_KEY"))
+    OPENROUTER_API_KEY = secrets_manager.decrypt(os.getenv("OPENROUTER_API_KEY"))
+    XAI_API_KEY = secrets_manager.decrypt(os.getenv("XAI_API_KEY"))
+    GROQ_API_KEY = secrets_manager.decrypt(os.getenv("GROQ_API_KEY"))
     OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
     ELEVENLABS_API_KEY = secrets_manager.decrypt(os.getenv("ELEVENLABS_API_KEY"))
     ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "JBFqnCBsd6RMkjVDRZzb")
 
     KILL_HOTKEY = "ctrl+shift+k"
+    TTS_PREFER_CLOUD = _get_bool("TTS_PREFER_CLOUD", False)
+    LLM_PREFER_CLOUD = _get_bool("LLM_PREFER_CLOUD", False)
 
     LOW_RAM_MODE = _get_bool("JARVIS_LOW_RAM_MODE", PROFILE_NAME == "low_ram")
     MAX_AGENT_WORKERS = int(os.getenv("MAX_AGENT_WORKERS", "2" if LOW_RAM_MODE else "4"))
@@ -87,14 +122,16 @@ class Config:
     SUPER_DIRECTORY_PATH = CONFIG_DIR / "data" / "super_directory.json"
     SUPER_VAULT_PATH = CONFIG_DIR / "data" / "super_vault.json"
     SUPER_VAULT_KEY_PATH = CONFIG_DIR / "data" / "super_vault.key"
-    SUPER_PLUGINS_DIR = BASE_DIR / "jarvis" / "plugins"
+    SUPER_PLUGINS_DIR = (CONFIG_DIR / "plugins") if getattr(sys, "frozen", False) else (BASE_DIR / "jarvis" / "plugins")
 
     def __init__(self):
         self.APPS_JSON.parent.mkdir(parents=True, exist_ok=True)
         self.MEMORY_DB.parent.mkdir(parents=True, exist_ok=True)
         self.SUPER_PLUGINS_DIR.mkdir(parents=True, exist_ok=True)
         self._ensure_super_defaults()
-        self._validate_config()
+        if not Config._warnings_printed:
+            self._validate_config()
+            Config._warnings_printed = True
 
     def _ensure_super_defaults(self):
         if not self.SUPER_STATE_PATH.exists():
@@ -133,11 +170,17 @@ class Config:
             "whisper_model": self.WHISPER_MODEL,
             "ollama_host": self.OLLAMA_HOST,
             "ollama_model": self.OLLAMA_MODEL,
+            "ollama_auto_start": self.OLLAMA_AUTO_START,
             "fallback_model": self.FALLBACK_MODEL,
             "openai_api": bool(self.OPENAI_API_KEY),
+            "openrouter_api": bool(self.OPENROUTER_API_KEY),
+            "xai_api": bool(self.XAI_API_KEY),
+            "groq_api": bool(self.GROQ_API_KEY),
             "elevenlabs_api": bool(self.ELEVENLABS_API_KEY),
             "tts_voice": self.TTS_VOICE,
             "kill_hotkey": self.KILL_HOTKEY,
+            "tts_prefer_cloud": self.TTS_PREFER_CLOUD,
+            "llm_prefer_cloud": self.LLM_PREFER_CLOUD,
             "profile_name": self.PROFILE_NAME,
             "low_ram_mode": self.LOW_RAM_MODE,
             "max_agent_workers": self.MAX_AGENT_WORKERS,
@@ -151,6 +194,12 @@ class Config:
 
         if not self.OPENAI_API_KEY:
             warnings.append("[WARNING] OPENAI_API_KEY not set. Vision and cloud features will be limited.")
+        if "openrouter.ai" in self.OPENAI_BASE_URL.lower() and not (self.OPENROUTER_API_KEY or self.OPENAI_API_KEY):
+            warnings.append("[WARNING] OPENROUTER_API_KEY not set while OPENAI_BASE_URL points to OpenRouter.")
+        if "api.x.ai" in self.OPENAI_BASE_URL.lower() and not (self.XAI_API_KEY or self.OPENAI_API_KEY):
+            warnings.append("[WARNING] XAI_API_KEY not set while OPENAI_BASE_URL points to xAI.")
+        if "api.groq.com" in self.OPENAI_BASE_URL.lower() and not (self.GROQ_API_KEY or self.OPENAI_API_KEY):
+            warnings.append("[WARNING] GROQ_API_KEY not set while OPENAI_BASE_URL points to Groq.")
 
         if not self.ELEVENLABS_API_KEY:
             warnings.append("[WARNING] ELEVENLABS_API_KEY not set. Cloud TTS will not be available.")

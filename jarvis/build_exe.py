@@ -34,7 +34,7 @@ def build():
     ]
 
     PyInstaller.__main__.run([
-        'jarvis/desktop_app.py',
+        'JARVIS.py',
         '--onefile',
         '--noconsole',  # Hide terminal window
         '--name=Jarvis_Mark_VII',

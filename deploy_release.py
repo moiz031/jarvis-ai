@@ -5,9 +5,12 @@ import sys
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DIST_EXE = os.path.join(BASE_DIR, "dist", "JarvisAI.exe")
+DIST_ONEDIR_EXE = os.path.join(BASE_DIR, "dist", "JarvisAI", "JarvisAI.exe")
 RELEASE_DIR = os.path.join(BASE_DIR, "Jarvis_Desktop_App")
 
-if not os.path.exists(DIST_EXE):
+if os.path.exists(DIST_ONEDIR_EXE):
+    DIST_EXE = DIST_ONEDIR_EXE
+elif not os.path.exists(DIST_EXE):
     print(f"Error: {DIST_EXE} not found. Build failed?")
     sys.exit(1)
 

@@ -5,8 +5,12 @@ __pycache__/
 .venv/
 build/
 dist/
+dist2/
 *.spec
 *.log
 data/
 node_modules
 jarvis_backend_env/
+backend/
+npm-debug.log*
+yarn-error.log*

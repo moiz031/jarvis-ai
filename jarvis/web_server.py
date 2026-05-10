@@ -19,6 +19,14 @@ try:
 except ImportError:
     from .config import BASE_DIR, Config
 
+try:
+    from memory.db import MemoryDB
+except ImportError:
+    try:
+        from .memory.db import MemoryDB
+    except Exception:
+        MemoryDB = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -55,9 +63,13 @@ class JarvisWebServer:
 
         @self.app.get("/")
         async def get_ui():
-            html_path = BASE_DIR / "jarvis" / "jarvis_ui_fixed.html"
-            if not html_path.exists():
-                html_path = BASE_DIR / "jarvis_ui.html"
+            for _name in ("jarvis_ui_fixed.html", "jarvis_ui.html", "index.html"):
+                html_path = BASE_DIR / "jarvis" / _name
+                if html_path.exists():
+                    break
+                html_path = BASE_DIR / _name
+                if html_path.exists():
+                    break
 
             if not html_path.exists():
                 logger.error("UI not found at %s", html_path)
@@ -291,6 +303,40 @@ class JarvisWebServer:
                 logger.error("Broadcast error: %s", exc)
                 await asyncio.sleep(0.05)
 
+    async def _cockpit_loop(self):
+        while self.running:
+            try:
+                snapshot = {
+                    "memory": {"tasks": [], "routines": [], "knowledge_count": 0, "tool_event_count": 0, "recent_actions": []},
+                    "super": {
+                        "state": self._read_json(self.config.SUPER_STATE_PATH, {}),
+                        "channels": self._read_json(self.config.SUPER_CHANNELS_PATH, {}),
+                        "directory": self._read_json(self.config.SUPER_DIRECTORY_PATH, {}),
+                    },
+                }
+                if MemoryDB is not None:
+                    try:
+                        db = MemoryDB()
+                        snapshot["memory"] = db.get_dashboard_snapshot()
+                    except Exception:
+                        pass
+
+                msg = {"type": "cockpit_state", "data": snapshot}
+                disconnected = set()
+                for client in self.clients:
+                    try:
+                        await client.send_json(msg)
+                    except Exception:
+                        disconnected.add(client)
+
+                for client in disconnected:
+                    self.clients.discard(client)
+
+                await asyncio.sleep(4)
+            except Exception as exc:
+                logger.error("Cockpit loop error: %s", exc)
+                await asyncio.sleep(4)
+
     def run(self, host="0.0.0.0", port=8080):
         @self.app.on_event("startup")
         async def startup_event():
@@ -298,6 +344,7 @@ class JarvisWebServer:
             asyncio.create_task(self._broadcast_loop())
             asyncio.create_task(self._metrics_loop())
             asyncio.create_task(self._process_loop())
+            asyncio.create_task(self._cockpit_loop())
 
         logger.info("Starting Jarvis Web Server on %s:%s", host, port)
         uvicorn.run(self.app, host=host, port=port, log_level="info")

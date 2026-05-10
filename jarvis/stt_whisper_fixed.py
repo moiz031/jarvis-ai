@@ -5,10 +5,15 @@ import threading
 import time
 import queue
 import logging
+import os
+from collections import deque
 from pathlib import Path
 
 import numpy as np
-import sounddevice as sd
+try:
+    import sounddevice as sd
+except Exception:
+    sd = None
 try:
     from faster_whisper import WhisperModel
     FASTER_WHISPER_AVAILABLE = True
@@ -35,12 +40,27 @@ class SpeechRecognizer:
                 "[STT] faster-whisper not installed. Voice input is disabled. "
                 "Install dependency to enable STT."
             )
-        self.sample_rate = 16000
-        self.block_size = 16000  # 1 second blocks
-        self.audio_queue = queue.Queue()
+        self.sample_rate = int(os.getenv("STT_SAMPLE_RATE", "16000"))
+        # Use larger processing blocks + bigger queue to reduce callback overflows on busy systems.
+        default_block = 8192 if getattr(self.config, "LOW_RAM_MODE", False) else 4096
+        self.block_size = int(os.getenv("STT_BLOCK_SIZE", str(default_block)))
+        self.audio_queue = queue.Queue(maxsize=int(os.getenv("STT_QUEUE_SIZE", "128")))
+        self.stream_latency = os.getenv("STT_LATENCY", "high").lower()
+        self.transcribe_language = (os.getenv("STT_LANGUAGE", "").strip().lower() or None)
+        self.transcribe_beam_size = int(os.getenv("STT_BEAM_SIZE", "3"))
+        self.transcribe_best_of = int(os.getenv("STT_BEST_OF", "3"))
+        self.transcribe_initial_prompt = os.getenv(
+            "STT_INITIAL_PROMPT",
+            "Roman Urdu aur English commands ko seedha text me likho.",
+        )
         self.stop_event = threading.Event()
         self.wake_phrase = self.config.WAKE_PHRASE.lower()
         self.stop_phrase = self.config.STOP_PHRASE.lower()
+        wake_aliases_env = os.getenv("STT_WAKE_ALIASES", "jarvis")
+        self.wake_aliases = {self.wake_phrase}
+        self.wake_aliases.update(
+            alias.strip().lower() for alias in wake_aliases_env.split(",") if alias.strip()
+        )
         
         # State management
         self.active = False
@@ -50,15 +70,26 @@ class SpeechRecognizer:
         # Audio buffers
         self.buffer = np.array([], dtype=np.float32)
         self.speech_buffer = []
+        self.wake_buffer_chunks = deque()
+        self.wake_buffer_samples = 0
+        self.max_wake_buffer_samples = int(self.sample_rate * 3)
         
         # VAD parameters
         self.ENERGY_THRESHOLD = 0.015
-        self.PAUSE_LIMIT = 2.0  # seconds
-        self.WAKE_CHECK_INTERVAL = 1.0
+        self.WAKE_ENERGY_THRESHOLD = float(
+            os.getenv("STT_WAKE_ENERGY_THRESHOLD", str(self.ENERGY_THRESHOLD))
+        )
+        self.PAUSE_LIMIT = float(os.getenv("STT_PAUSE_LIMIT", "2.0"))  # seconds
+        self.WAKE_CHECK_INTERVAL = float(os.getenv("STT_WAKE_INTERVAL", "1.5"))
+        self.MIN_COMMAND_SECONDS = float(os.getenv("STT_MIN_COMMAND_SECONDS", "0.8"))
+        self.NO_MATCH_COOLDOWN = float(os.getenv("STT_NO_MATCH_COOLDOWN", "6.0"))
         
         # State flags
         self.is_speaking = False
         self.silence_start: float | None = None
+        self.overflow_count = 0
+        self.last_overflow_log = 0.0
+        self.last_no_match_emit = 0.0
         
         # Callbacks
         self.wake_callback = None
@@ -76,6 +107,8 @@ class SpeechRecognizer:
                 break
         self.buffer = np.array([], dtype=np.float32)
         self.speech_buffer = []
+        self.wake_buffer_chunks.clear()
+        self.wake_buffer_samples = 0
         self.is_speaking = False
         self.silence_start = None
         logger.info("[STT] Audio buffer and queue reset")
@@ -85,51 +118,96 @@ class SpeechRecognizer:
         if self.stop_event.is_set():
             return
         if status:
-            logger.warning(f"[STT] Audio callback status: {status}")
+            self.overflow_count += 1
+            now = time.time()
+            if now - self.last_overflow_log >= 5:
+                logger.warning(
+                    "[STT] Audio callback status: %s (events=%s). "
+                    "Mic input is lagging; stream tuned for recovery.",
+                    status,
+                    self.overflow_count,
+                )
+                self.last_overflow_log = now
         # Convert to mono float32 numpy array
         audio = indata[:, 0].astype(np.float32)
-        self.audio_queue.put(audio)
+        try:
+            self.audio_queue.put_nowait(audio)
+        except queue.Full:
+            # Keep most-recent audio to recover from temporary overload.
+            try:
+                self.audio_queue.get_nowait()
+            except queue.Empty:
+                pass
+            try:
+                self.audio_queue.put_nowait(audio)
+            except queue.Full:
+                pass
 
     def _calculate_energy(self, audio_chunk):
         """Calculate RMS energy of audio chunk."""
         return np.sqrt(np.mean(audio_chunk ** 2))
 
-    def _handle_segment(self, audio_segment):
+    def _handle_segment(self, audio_segment, for_wake: bool = False):
         """Runs Whisper on a segment and checks for wake/stop phrases."""
         if self.model is None:
-            return
-        try:
-            segments, info = self.model.transcribe(audio_segment, language=None, beam_size=2)
-            for segment in segments:
-                text = segment.text.strip().lower()
-                if not text:
-                    continue
-                
-                logger.info(f"[STT] Heard: '{text}' (confidence: {segment.avg_logprob:.2f})")
-                
-                # Wake word detection (inactive mode)
-                if not self.active and self.wake_phrase in text:
-                    self.active = True
-                    self.last_active_time = time.time()
-                    if hasattr(self, "wake_callback"):
-                        self.wake_callback()
-                    logger.info(f"[STT] [WAKE] Wake phrase detected: {text}")
-                    
-                # Command processing (active mode)
-                elif self.active:
-                    self.last_active_time = time.time()
-                    if hasattr(self, "transcript_callback"):
-                        self.transcript_callback(text)
-                    
-                    # Check for stop phrase
-                    if self.stop_phrase.lower() in text:
-                        self.active = False
-                        if hasattr(self, "stop_callback"):
-                            self.stop_callback()
-                        logger.info("[STT] [STOP] Stop phrase detected")
-                        
-        except Exception as e:
-            logger.error(f"[STT] Whisper transcription error: {e}")
+            return False
+
+        recognized = False
+        if for_wake:
+            languages_to_try = [self.transcribe_language] if self.transcribe_language else [None, "en", "ur"]
+        else:
+            languages_to_try = [self.transcribe_language] if self.transcribe_language else ["ur", "en", None]
+
+        for lang in languages_to_try:
+            try:
+                segments, info = self.model.transcribe(
+                    audio_segment,
+                    language=lang,
+                    beam_size=self.transcribe_beam_size,
+                    best_of=self.transcribe_best_of,
+                    vad_filter=for_wake,
+                    condition_on_previous_text=False,
+                    temperature=0.0,
+                    initial_prompt=self.transcribe_initial_prompt,
+                )
+                had_text_for_lang = False
+                for segment in segments:
+                    text = segment.text.strip().lower()
+                    if not text:
+                        continue
+                    had_text_for_lang = True
+                    recognized = True
+                    logger.info(f"[STT] Heard: '{text}' (confidence: {segment.avg_logprob:.2f})")
+
+                    # Wake word detection (inactive mode)
+                    if not self.active and any(alias in text for alias in self.wake_aliases):
+                        self.active = True
+                        self.last_active_time = time.time()
+                        if callable(self.wake_callback):
+                            self.wake_callback()
+                        logger.info(f"[STT] [WAKE] Wake phrase detected: {text}")
+
+                    # Command processing (active mode)
+                    elif self.active:
+                        self.last_active_time = time.time()
+                        if callable(self.transcript_callback):
+                            self.transcript_callback(text)
+
+                        # Check for stop phrase
+                        if self.stop_phrase.lower() in text:
+                            self.active = False
+                            if callable(self.stop_callback):
+                                self.stop_callback()
+                            logger.info("[STT] [STOP] Stop phrase detected")
+
+                if had_text_for_lang:
+                    break
+            except Exception as e:
+                logger.error(f"[STT] Whisper transcription error (lang={lang}): {e}")
+
+        if not recognized:
+            logger.info("[STT] No clear speech recognized from current segment.")
+        return recognized
 
     def _process_queue(self):
         """Main VAD processing loop with proper state management."""
@@ -168,7 +246,16 @@ class SpeechRecognizer:
                                     
                                     # Concatenate and process
                                     full_audio = np.concatenate(self.speech_buffer)
-                                    self._handle_segment(full_audio)
+                                    duration_sec = len(full_audio) / float(self.sample_rate)
+                                    recognized = self._handle_segment(full_audio, for_wake=False)
+                                    if (
+                                        not recognized
+                                        and duration_sec >= self.MIN_COMMAND_SECONDS
+                                        and callable(self.transcript_callback)
+                                        and (time.time() - self.last_no_match_emit) >= self.NO_MATCH_COOLDOWN
+                                    ):
+                                        self.last_no_match_emit = time.time()
+                                        self.transcript_callback("__stt_no_match__")
                                     
                                     # Reset state
                                     self.speech_buffer = []
@@ -177,18 +264,20 @@ class SpeechRecognizer:
                 
                 # PASSIVE MODE: Wake word detection
                 else:
-                    # Keep rolling buffer for wake word detection
-                    self.buffer = np.concatenate((self.buffer, chunk))
-                    if len(self.buffer) > self.sample_rate * 3:
-                        self.buffer = self.buffer[-int(self.sample_rate * 3):]
-                    
+                    # Keep rolling buffer for wake word detection (chunked to avoid expensive copies).
+                    self.wake_buffer_chunks.append(chunk)
+                    self.wake_buffer_samples += len(chunk)
+                    while self.wake_buffer_samples > self.max_wake_buffer_samples and self.wake_buffer_chunks:
+                        removed = self.wake_buffer_chunks.popleft()
+                        self.wake_buffer_samples -= len(removed)
+
                     # Only check wake word if there's decent energy (avoid CPU waste on silence)
-                    if energy > 0.005:
+                    if energy > self.WAKE_ENERGY_THRESHOLD:
                         # Check wake word periodically
                         current_time = time.time()
                         if current_time - last_wake_check > self.WAKE_CHECK_INTERVAL:
-                            if len(self.buffer) >= self.sample_rate * 1.5:
-                                self._handle_segment(self.buffer)
+                            if self.wake_buffer_samples >= self.sample_rate * 1.5:
+                                self._handle_segment(np.concatenate(tuple(self.wake_buffer_chunks)), for_wake=True)
                             last_wake_check = current_time
                 
             except queue.Empty:
@@ -208,11 +297,24 @@ class SpeechRecognizer:
                 time.sleep(1)
             logger.info("[STT] No-STT mode stopped")
             return
+        if sd is None:
+            logger.warning("[STT] sounddevice is not installed. Voice input is disabled.")
+            while not self.stop_event.is_set():
+                time.sleep(1)
+            logger.info("[STT] No-audio mode stopped")
+            return
         
         # Start audio stream
         stream = None
         try:
-            stream = sd.InputStream(samplerate=self.sample_rate, channels=1, callback=self._audio_callback)
+            stream = sd.InputStream(
+                samplerate=self.sample_rate,
+                channels=1,
+                blocksize=self.block_size,
+                dtype="float32",
+                latency=self.stream_latency,
+                callback=self._audio_callback,
+            )
             stream.start()
         except Exception as e:
             logger.error(f"[STT] Unable to start audio input stream: {e}")
